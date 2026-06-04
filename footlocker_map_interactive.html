@@ -1,0 +1,327 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Foot Locker Israel — מפת סניפים</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css"/>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=Heebo:wght@300;400;700;900&display=swap" rel="stylesheet">
+<style>
+* { margin:0; padding:0; box-sizing:border-box; }
+body { font-family:'Heebo',sans-serif; background:#0a0a0a; color:#f0ebe0; height:100vh; display:flex; flex-direction:column; overflow:hidden; }
+
+header {
+  display:flex; align-items:center; justify-content:space-between;
+  padding:12px 24px; background:#0a0a0a; border-bottom:2px solid #e31837;
+  flex-shrink:0; z-index:1000;
+}
+.logo { background:#e31837; color:#fff; font-weight:900; font-size:11px; letter-spacing:1px; padding:5px 9px; text-transform:uppercase; line-height:1.4; }
+.title { font-size:14px; font-weight:700; letter-spacing:2px; text-transform:uppercase; margin-right:14px; }
+.subtitle { font-size:10px; color:#555; letter-spacing:1px; }
+.stats { display:flex; gap:20px; }
+.stat-num { font-size:24px; font-weight:900; color:#e31837; line-height:1; }
+.stat-lbl { font-size:9px; color:#555; letter-spacing:1.5px; text-transform:uppercase; }
+
+.main { display:flex; flex:1; overflow:hidden; }
+
+/* SIDEBAR */
+.sidebar { width:280px; background:#111; border-left:1px solid #222; display:flex; flex-direction:column; overflow:hidden; flex-shrink:0; }
+.sidebar-top { padding:12px 14px; background:#161616; border-bottom:1px solid #222; }
+input.search { width:100%; background:#0a0a0a; border:1px solid #2a2a2a; color:#f0ebe0; padding:8px 10px; font-family:'Heebo',sans-serif; font-size:13px; direction:rtl; outline:none; margin-bottom:8px; }
+input.search:focus { border-color:#e31837; }
+input.search::placeholder { color:#444; }
+.filters { display:flex; flex-wrap:wrap; gap:5px; }
+.btn { padding:3px 9px; font-size:10px; font-family:'Heebo',sans-serif; cursor:pointer; border:1px solid #2a2a2a; background:transparent; color:#666; letter-spacing:.5px; transition:all .15s; }
+.btn:hover, .btn.on { background:#e31837; color:#fff; border-color:#e31837; }
+.count { font-size:10px; color:#444; margin-top:6px; }
+
+.list { flex:1; overflow-y:auto; scrollbar-width:thin; scrollbar-color:#e31837 #0a0a0a; }
+.item { padding:10px 14px; border-bottom:1px solid #1a1a1a; cursor:pointer; transition:background .12s; direction:rtl; }
+.item:hover { background:#1a1a1a; }
+.item.active { background:#1a0507; border-right:3px solid #e31837; }
+.item-city { font-size:12px; font-weight:700; }
+.item-name { font-size:11px; color:#666; margin-top:1px; }
+.item-hrs { font-size:10px; color:#3a3a3a; margin-top:2px; }
+
+/* MAP */
+#map { flex:1; }
+
+/* Leaflet popup override */
+.leaflet-popup-content-wrapper {
+  background:#0d0d0d !important;
+  border:1px solid #e31837 !important;
+  border-radius:0 !important;
+  box-shadow:0 4px 20px rgba(227,24,55,.3) !important;
+  color:#f0ebe0 !important;
+  font-family:'Heebo',sans-serif !important;
+  direction:rtl;
+}
+.leaflet-popup-tip { background:#e31837 !important; }
+.leaflet-popup-close-button { color:#e31837 !important; }
+.popup-city { font-size:14px; font-weight:900; color:#e31837; }
+.popup-name { font-size:12px; color:#bbb; margin-top:3px; }
+.popup-hrs { font-size:11px; color:#555; margin-top:5px; line-height:1.7; }
+.popup-phone { font-size:11px; color:#e31837; margin-top:5px; }
+
+/* Custom marker */
+.fl-marker {
+  width:12px; height:12px; background:#e31837;
+  border-radius:50%; border:2px solid rgba(227,24,55,.4);
+  box-shadow:0 0 8px rgba(227,24,55,.6);
+  transition:all .2s;
+}
+.fl-marker:hover { transform:scale(1.6); background:#c9a84c; }
+</style>
+</head>
+<body>
+
+<header>
+  <div style="display:flex;align-items:center;gap:14px">
+    <div class="logo">FOOT<br>LOCKER</div>
+    <div>
+      <div class="title">מפת סניפים — ישראל</div>
+      <div class="subtitle">STORE NETWORK · 2025</div>
+    </div>
+  </div>
+  <div class="stats">
+    <div><div class="stat-num" id="countNum">89</div><div class="stat-lbl">סניפים</div></div>
+    <div><div class="stat-num">30+</div><div class="stat-lbl">ערים</div></div>
+  </div>
+</header>
+
+<div class="main">
+  <div class="sidebar">
+    <div class="sidebar-top">
+      <input class="search" id="search" type="text" placeholder="חפש עיר או קניון..." oninput="doFilter()"/>
+      <div class="filters">
+        <button class="btn on" onclick="setRegion('all',this)">הכל</button>
+        <button class="btn" onclick="setRegion('north',this)">צפון</button>
+        <button class="btn" onclick="setRegion('center',this)">מרכז</button>
+        <button class="btn" onclick="setRegion('south',this)">דרום</button>
+        <button class="btn" onclick="setRegion('jerusalem',this)">ירושלים</button>
+        <button class="btn" onclick="setRegion('eilat',this)">אילת</button>
+      </div>
+      <div class="count" id="countLbl">מציג 89 סניפים</div>
+    </div>
+    <div class="list" id="list"></div>
+  </div>
+  <div id="map"></div>
+</div>
+
+<script>
+const ALL = [
+  // === NORTH ===
+  { city:"נצרת", name:"238 ציפורי / צומת המוביל", region:"north", lat:32.6938, lng:35.2985, hours:"א׳-ה׳ 09:30-21:30 | ו׳ 09:30-15:00 | שבת עד 23:00", phone:"" },
+  { city:"רמת ישי", name:"סטריט מול", region:"north", lat:32.7075, lng:35.1739, hours:"א׳-ה׳ 09:30-20:30 | ו׳ 09:00-14:30 | שבת 10:00-22:00", phone:"04-8290731" },
+  { city:"כרמיאל", name:"ביג כרמיאל", region:"north", lat:32.9272, lng:35.3208, hours:"א׳-ה׳ 09:30-21:30 | ו׳ 09:00-15:00 | שבת 11:00-22:30", phone:"04-8419226" },
+  { city:"קרית אתא", name:"קניון הצפון (איקאה)", region:"north", lat:32.8076, lng:35.0772, hours:"א׳-ה׳ 10:00-22:00 | ו׳ 09:00-14:30 | שבת עד 22:00", phone:"04-6238218" },
+  { city:"חיפה", name:"חוצות המפרץ", region:"north", lat:32.8087, lng:35.0541, hours:"א׳-ה׳ 09:30-22:00 | ו׳ 09:00-14:30 | שבת 10:30-22:00", phone:"04-6090492" },
+  { city:"חיפה", name:"גרנד קניון חיפה", region:"north", lat:32.7897, lng:35.0080, hours:"א׳-ה׳ 10:00-22:00 | ו׳ 09:00-14:30 | שבת עד 22:30", phone:"07-4782614" },
+  { city:"קרית ביאליק", name:"קריון", region:"north", lat:32.8428, lng:35.0923, hours:"א׳-ה׳ 10:00-22:00 | ו׳ 09:00-14:30 | שבת עד 22:30", phone:"04-8234663" },
+  { city:"עכו", name:"עכו", region:"north", lat:32.9230, lng:35.0813, hours:"א׳-ה׳ 09:30-21:00 | ו׳ 09:00-14:30 | שבת עד 23:00", phone:"07-7198364" },
+  { city:"נהריה", name:"ארנה נהריה", region:"north", lat:33.0047, lng:35.0968, hours:"א׳-ה׳ 09:30-21:00 | ו׳ 09:00-14:30 | שבת עד 22:30", phone:"" },
+  { city:"גליל המערבי", name:"רגבה", region:"north", lat:32.9752, lng:35.0944, hours:"א׳-ה׳ 09:30-21:30 | ו׳ 09:00-14:30 | שבת 11:00-23:00", phone:"04-7799751" },
+  { city:"ירכא", name:"ירכא (אאוטלט)", region:"north", lat:32.9561, lng:35.1833, hours:"א׳-ו׳ שבת 10:00-22:00", phone:"07-4782609" },
+  { city:"קרית שמונה", name:"קרית שמונה", region:"north", lat:33.2074, lng:35.5695, hours:"א׳-ה׳ 09:30-21:00 | ו׳ 09:00-14:30 | שבת עד 22:00", phone:"" },
+  { city:"טבריה", name:"טבריה", region:"north", lat:32.7905, lng:35.5338, hours:"א׳-ה׳ 10:00-22:00 | ו׳ 09:00-14:30 | שבת עד 22:30", phone:"04-6669786" },
+  { city:"בית שאן", name:"בית שאן", region:"north", lat:32.5111, lng:35.5008, hours:"א׳-ה׳ 09:30-21:00 | ו׳ 09:00-14:00 | שבת עד 22:00", phone:"07-4707799" },
+  { city:"עפולה", name:"E center עפולה", region:"north", lat:32.6101, lng:35.2858, hours:"א׳-ה׳ 09:30-21:30 | ו׳ 09:00-14:30 | שבת עד 23:00", phone:"" },
+  { city:"כפר חורש", name:"כפר חורש", region:"north", lat:32.7290, lng:35.2090, hours:"א׳-ה׳ 09:30-21:00 | ו׳ 09:00-14:30", phone:"" },
+  { city:"ראש פינה", name:"ראש פינה", region:"north", lat:32.9656, lng:35.5480, hours:"א׳-ה׳ 09:30-21:00 | ו׳ 09:00-14:30 | שבת עד 22:00", phone:"" },
+  { city:"דלית אל כרמל", name:"דלית אל כרמל", region:"north", lat:32.7047, lng:35.0681, hours:"א׳-ה׳ 09:30-21:00 | ו׳ 09:00-14:30 | שבת עד 22:00", phone:"" },
+
+  // === CENTER ===
+  { city:"תל אביב", name:"TLV Fashion Mall", region:"center", lat:32.0678, lng:34.7836, hours:"א׳-ה׳ 10:00-22:00 | ו׳ 08:30-16:00 | שבת עד 23:00", phone:"03-6889493" },
+  { city:"תל אביב", name:"דיזנגוף סנטר", region:"center", lat:32.0759, lng:34.7745, hours:"א׳-ה׳ 09:30-22:00 | ו׳ 09:00-15:30 | שבת סגור", phone:"03-7756392" },
+  { city:"תל אביב", name:"גן העיר", region:"center", lat:32.0823, lng:34.7802, hours:"א׳-ה׳ 10:00-20:00 | ו׳ 09:00-14:30 | שבת סגור", phone:"03-7747261" },
+  { city:"תל אביב", name:"נמל תל אביב", region:"center", lat:32.0978, lng:34.7688, hours:"א׳-ה׳ 10:00-22:00 | ו׳ 09:00-15:00 | שבת עד 23:00", phone:"" },
+  { city:"תל אביב", name:"קניון רמת אביב", region:"center", lat:32.1128, lng:34.8017, hours:"א׳-ה׳ 09:30-22:00 | ו׳ 09:00-15:00 | שבת עד 22:30", phone:"" },
+  { city:"רמת גן", name:"קניון איילון", region:"center", lat:32.1004, lng:34.8267, hours:"א׳-ה׳ 09:30-22:00 | ו׳ 09:30-15:00 | שבת עד 22:30", phone:"03-9670431" },
+  { city:"רמת גן", name:"ביאליק רמת גן", region:"center", lat:32.0858, lng:34.8115, hours:"א׳-ה׳ 09:00-21:00 | ו׳ 09:00-14:00 | שבת סגור", phone:"03-5064375" },
+  { city:"גבעתיים", name:"קניון גבעתיים", region:"center", lat:32.0659, lng:34.8136, hours:"א׳-ה׳ 09:30-22:00 | ו׳ 09:30-15:00 | שבת עד 22:30", phone:"" },
+  { city:"בת ים", name:"קניון בת ים", region:"center", lat:32.0191, lng:34.7490, hours:"א׳-ה׳ 09:30-21:30 | ו׳ 09:00-14:30 | שבת עד 22:30", phone:"" },
+  { city:"חולון", name:"חולון", region:"center", lat:32.0123, lng:34.7794, hours:"א׳-ה׳ 09:30-21:30 | ו׳ 09:00-14:30 | שבת עד 22:30", phone:"03-7971376" },
+  { city:"ראשון לציון", name:"קניון הזהב", region:"center", lat:31.9910, lng:34.7751, hours:"א׳-ה׳ 09:30-22:00 | ו׳ 09:00-15:00 | שבת עד 23:00", phone:"03-6237194" },
+  { city:"ראשון לציון", name:"ראשונים", region:"center", lat:31.9502, lng:34.8029, hours:"א׳-ה׳ 09:30-22:00 | ו׳ 09:00-15:00 | שבת עד 23:00", phone:"07-7077797" },
+  { city:"ראשון לציון", name:"ראשון G", region:"center", lat:31.9649, lng:34.8155, hours:"א׳-ה׳ 09:30-22:00 | ו׳ 09:00-15:00 | שבת עד 22:30", phone:"" },
+  { city:"ראשון לציון", name:"סינמה סיטי ראשון לציון", region:"center", lat:31.9776, lng:34.7973, hours:"א׳-ה׳ 10:00-23:00 | ו׳ 09:00-15:00 | שבת עד 23:30", phone:"" },
+  { city:"פתח תקווה", name:"הקניון הגדול פתח תקווה", region:"center", lat:32.0843, lng:34.8812, hours:"א׳-ה׳ 09:30-22:00 | ו׳ 09:00-15:00 | שבת עד 22:30", phone:"" },
+  { city:"כפר סבא", name:"קניון ערים", region:"center", lat:32.1740, lng:34.9071, hours:"א׳-ה׳ 09:00-21:00 | ו׳ 09:00-15:00 | שבת עד 22:30", phone:"07-4776831" },
+  { city:"כפר סבא", name:"ג׳י מול כפר סבא", region:"center", lat:32.1721, lng:34.9285, hours:"א׳-ה׳ 09:30-21:30 | ו׳ 09:00-14:30 | שבת עד 22:00", phone:"" },
+  { city:"רעננה", name:"קניון רננים", region:"center", lat:32.1843, lng:34.8698, hours:"א׳-ה׳ 10:00-22:00 | ו׳ 09:00-14:30 | שבת עד 22:30", phone:"" },
+  { city:"הרצליה", name:"קניון שבעת הכוכבים הרצליה", region:"center", lat:32.1651, lng:34.8240, hours:"א׳-ה׳ 09:30-21:30 | ו׳ 09:00-14:30 | שבת 10:00-22:00", phone:"09-8950768" },
+  { city:"נתניה", name:"קניון עיר ימים", region:"center", lat:32.2792, lng:34.8470, hours:"א׳-ה׳ 09:30-21:30 | ו׳ 09:00-14:30 | שבת עד 22:30", phone:"" },
+  { city:"נתניה", name:"גנדן נתניה", region:"center", lat:32.3235, lng:34.8634, hours:"א׳-ה׳ 09:30-21:00 | ו׳ 09:00-14:30 | שבת עד 22:00", phone:"" },
+  { city:"חדרה", name:"קניון מול החוף", region:"center", lat:32.4414, lng:34.8943, hours:"א׳-ה׳ 10:00-21:30 | ו׳ 09:00-15:00 | שבת עד 23:30", phone:"04-8673774" },
+  { city:"הוד השרון", name:"קניון שרונים", region:"center", lat:32.1333, lng:34.9015, hours:"א׳-ה׳ 09:30-21:00 | ו׳ 09:00-15:00 | שבת סגור", phone:"09-8302315" },
+  { city:"קניון השרון", name:"קניון השרון", region:"center", lat:32.2640, lng:34.8801, hours:"א׳-ה׳ 09:30-21:30 | ו׳ 09:00-14:30 | שבת עד 22:30", phone:"" },
+  { city:"אור עקיבא", name:"שדרות הנשיא וייצמן", region:"center", lat:32.5046, lng:34.9161, hours:"א׳-ה׳ 09:30-21:00 | ו׳ 09:00-14:30", phone:"" },
+  { city:"מודיעין", name:"קניון מודיעין", region:"center", lat:31.8997, lng:35.0077, hours:"א׳-ה׳ 09:30-22:00 | ו׳ 09:00-15:00 | שבת עד 23:00", phone:"08-6184406" },
+  { city:"שוהם", name:"שדרות עמק איילון", region:"center", lat:31.9990, lng:34.9469, hours:"א׳-ה׳ 09:30-21:00 | ו׳ 09:30-15:00 | שבת סגור", phone:"03-6957952" },
+  { city:"יהוד", name:"ביג יהוד", region:"center", lat:31.9996, lng:34.8963, hours:"א׳-ה׳ 09:30-21:30 | ו׳ 09:00-15:00 | שבת עד 23:00", phone:"" },
+  { city:"קרית אונו", name:"קניון קרית אונו", region:"center", lat:32.0609, lng:34.8641, hours:"א׳-ה׳ 09:30-22:00 | ו׳ 09:00-14:30 | שבת עד 22:30", phone:"" },
+  { city:"גלילות", name:"גלילות", region:"center", lat:32.1288, lng:34.8369, hours:"א׳-ה׳ 09:30-21:30 | ו׳ 09:00-15:00 | שבת עד 22:30", phone:"" },
+  { city:"כפר יונה", name:"כפר יונה", region:"center", lat:32.3207, lng:34.9377, hours:"א׳-ה׳ 09:30-21:30 | ו׳ 09:00-14:30 | שבת עד 22:30", phone:"" },
+  { city:"זכרון יעקב", name:"מול זכרון", region:"center", lat:32.5706, lng:34.9580, hours:"א׳-ה׳ 09:30-21:00 | ו׳ 09:00-14:30", phone:"" },
+  { city:"גן שמואל", name:"מבנה גן שמואל", region:"center", lat:32.4573, lng:34.9272, hours:"א׳-ה׳ 09:30-21:00 | ו׳ 09:00-14:30", phone:"" },
+  { city:"ביג קסטינה", name:"ביג קסטינה", region:"center", lat:31.8471, lng:34.7302, hours:"א׳-ה׳ 09:30-21:30 | ו׳ 09:00-14:30 | שבת עד 22:30", phone:"" },
+  { city:"כרמי גת", name:"ביג כרמי גת", region:"center", lat:31.6106, lng:34.8697, hours:"א׳-ה׳ 09:30-21:30 | ו׳ 09:00-14:30 | שבת עד 22:30", phone:"" },
+  { city:"ביל״ו", name:"ביל״ו סנטר", region:"center", lat:31.8882, lng:34.8019, hours:"א׳-ה׳ 09:30-22:00 | ו׳ 09:00-15:00 | שבת עד 23:00", phone:"" },
+  { city:"ביג סנטר", name:"ביג סנטר", region:"center", lat:32.0241, lng:34.7641, hours:"א׳-ה׳ 09:30-21:30 | ו׳ 09:00-14:30 | שבת עד 22:30", phone:"" },
+
+  // === JERUSALEM ===
+  { city:"ירושלים", name:"קינג ג׳ורג׳", region:"jerusalem", lat:31.7815, lng:35.2160, hours:"א׳-ה׳ 09:30-21:30 | ו׳ 09:00-15:00 | שבת סגור", phone:"" },
+  { city:"ירושלים", name:"קניון מלחה", region:"jerusalem", lat:31.7475, lng:35.1875, hours:"א׳-ה׳ 09:30-22:00 | ו׳ 09:00-15:00 | שבת עד 22:30", phone:"" },
+  { city:"ירושלים", name:"תלפיות", region:"jerusalem", lat:31.7458, lng:35.2197, hours:"א׳-ה׳ 09:30-21:30 | ו׳ 09:00-14:30 | שבת עד 22:00", phone:"" },
+  { city:"ירושלים", name:"הדר תלפיות", region:"jerusalem", lat:31.7445, lng:35.2243, hours:"א׳-ה׳ 09:30-21:30 | ו׳ 09:00-14:30 | שבת עד 22:00", phone:"" },
+  { city:"ירושלים", name:"ממילא", region:"jerusalem", lat:31.7782, lng:35.2258, hours:"א׳-ה׳ 09:30-21:00 | ו׳ 09:00-14:30 | שבת סגור", phone:"" },
+  { city:"ירושלים", name:"ישפרו סנטר", region:"jerusalem", lat:31.7921, lng:35.2135, hours:"א׳-ה׳ 09:30-22:00 | ו׳ 09:00-15:00 | שבת עד 22:30", phone:"" },
+  { city:"מבשרת ציון", name:"מבשרת ציון", region:"jerusalem", lat:31.7967, lng:35.1465, hours:"א׳-ה׳ 09:30-21:30 | ו׳ 09:00-14:30 | שבת עד 22:30", phone:"" },
+  { city:"מעלה אדומים", name:"מעלה אדומים", region:"jerusalem", lat:31.7735, lng:35.2991, hours:"א׳-ה׳ 09:30-21:00 | ו׳ 09:00-14:30 | שבת עד 22:30", phone:"02-6246619" },
+  { city:"ים המלח", name:"ים המלח", region:"jerusalem", lat:31.6587, lng:35.3888, hours:"א׳-ה׳ 09:00-22:00 | ו׳ 09:00-14:30 | שבת עד 22:00", phone:"" },
+
+  // === SOUTH ===
+  { city:"רחובות", name:"רחובות", region:"south", lat:31.8928, lng:34.8113, hours:"א׳-ה׳ 09:30-21:30 | ו׳ 09:00-14:30 | שבת עד 22:30", phone:"" },
+  { city:"רמלה", name:"קניון רמלה", region:"south", lat:31.9329, lng:34.8737, hours:"א׳-ה׳ 09:30-21:00 | ו׳ 09:00-14:30 | שבת עד 22:00", phone:"" },
+  { city:"קרית רוטשילד", name:"קניון רוטשילד", region:"south", lat:31.9221, lng:34.8017, hours:"א׳-ה׳ 09:30-21:30 | ו׳ 09:00-14:30 | שבת עד 22:30", phone:"" },
+  { city:"גדרה", name:"ביג גדרה", region:"south", lat:31.8131, lng:34.7783, hours:"א׳-ה׳ 09:30-21:30 | ו׳ 09:00-14:30 | שבת עד 22:30", phone:"" },
+  { city:"אשדוד", name:"אשדוד סי מול", region:"south", lat:31.7927, lng:34.6389, hours:"א׳-ה׳ 09:30-21:30 | ו׳ 09:30-14:30 | שבת עד 23:00", phone:"08-6379465" },
+  { city:"אשדוד", name:"אשדוד ביג", region:"south", lat:31.7764, lng:34.6642, hours:"א׳-ה׳ 09:30-21:30 | ו׳ 09:30-14:30 | שבת 10:00-23:00", phone:"08-6831794" },
+  { city:"אשדוד", name:"סטאר אשדוד", region:"south", lat:31.8063, lng:34.6620, hours:"א׳-ה׳ 09:30-21:30 | ו׳ 09:30-14:30 | שבת עד 22:30", phone:"" },
+  { city:"אשקלון", name:"גירון אשקלון", region:"south", lat:31.6586, lng:34.5748, hours:"א׳-ה׳ 09:30-21:30 | ו׳ 09:00-14:30 | שבת עד 22:30", phone:"" },
+  { city:"אשקלון", name:"גלובוס אשקלון", region:"south", lat:31.6701, lng:34.5913, hours:"א׳-ה׳ 09:30-21:30 | ו׳ 09:00-14:30 | שבת עד 22:30", phone:"" },
+  { city:"אשקלון", name:"סילבר אשקלון", region:"south", lat:31.6524, lng:34.5670, hours:"א׳-ה׳ 09:30-21:30 | ו׳ 09:00-14:30 | שבת עד 22:30", phone:"" },
+  { city:"שדרות", name:"שדרות", region:"south", lat:31.5208, lng:34.5939, hours:"א׳-ה׳ 09:00-22:00 | ו׳ 09:00-15:00 | שבת עד 23:00", phone:"08-6193205" },
+  { city:"נתיבות", name:"נתיבות", region:"south", lat:31.4160, lng:34.5884, hours:"א׳-ה׳ 09:30-21:00 | ו׳ 09:00-14:30 | שבת עד 22:00", phone:"" },
+  { city:"באר שבע", name:"ביג באר שבע", region:"south", lat:31.2439, lng:34.8098, hours:"א׳-ה׳ 09:30-21:30 | ו׳ 09:00-14:00 | שבת 11:00-23:00", phone:"08-9129603" },
+  { city:"באר שבע", name:"גרנד אופר באר שבע", region:"south", lat:31.2526, lng:34.7684, hours:"א׳-ה׳ 09:30-21:30 | ו׳ 09:00-14:00 | שבת עד 23:00", phone:"" },
+  { city:"באר שבע", name:"קניון הנגב", region:"south", lat:31.2361, lng:34.7843, hours:"א׳-ה׳ 09:30-21:30 | ו׳ 09:00-14:30 | שבת עד 22:30", phone:"" },
+  { city:"דימונה", name:"דימונה", region:"south", lat:31.0742, lng:35.0323, hours:"א׳-ה׳ 09:00-21:00 | ו׳ 09:00-14:00 | שבת עד 21:30", phone:"08-6287866" },
+
+  // === EILAT ===
+  { city:"אילת", name:"אילת רויאל ביץ׳", region:"eilat", lat:29.5489, lng:34.9631, hours:"א׳-ו׳ שבת 09:00-00:00 | יולי-אוגוסט עד 01:00", phone:"08-9118966" },
+  { city:"אילת", name:"אילת ביג", region:"eilat", lat:29.5655, lng:34.9601, hours:"א׳-ה׳ 09:30-21:30 | ו׳ 09:00-14:30 | שבת 11:00-22:30", phone:"08-6167921" },
+  { city:"אילת", name:"אייס מול אילת", region:"eilat", lat:29.5503, lng:34.9561, hours:"א׳-ה׳ 09:30-22:00 | ו׳ 09:00-15:00 | שבת עד 23:00", phone:"" },
+  { city:"אילת", name:"קניון שבעת הכוכבים אילת", region:"eilat", lat:29.5564, lng:34.9509, hours:"א׳-ה׳ 09:30-22:00 | ו׳ 09:00-14:30 | שבת עד 23:00", phone:"" },
+  { city:"אילת", name:"קניון מול הים", region:"eilat", lat:29.5481, lng:34.9540, hours:"א׳-ה׳ 09:30-22:00 | ו׳ 09:00-15:00 | שבת עד 23:00", phone:"" },
+  { city:"אילת", name:"הטיילת החדשה", region:"eilat", lat:29.5558, lng:34.9575, hours:"א׳-ו׳ שבת 09:00-22:00", phone:"" },
+];
+
+// Region colors
+const COLORS = {
+  north:'#3b82f6', center:'#e31837', south:'#f59e0b', jerusalem:'#8b5cf6', eilat:'#10b981'
+};
+
+let map, markers = [], activeRegion = 'all', activeMarker = null;
+
+function makeIcon(region, big=false) {
+  const c = COLORS[region] || '#e31837';
+  const s = big ? 16 : 10;
+  return L.divIcon({
+    className:'',
+    html:`<div style="width:${s}px;height:${s}px;background:${c};border-radius:50%;border:2px solid ${c}44;box-shadow:0 0 6px ${c}88;transition:all .2s"></div>`,
+    iconSize:[s,s], iconAnchor:[s/2,s/2]
+  });
+}
+
+function initMap() {
+  map = L.map('map', { center:[31.5, 34.85], zoom:7, zoomControl:true });
+
+  // Dark tile layer
+  L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+    attribution:'&copy; OpenStreetMap &copy; CARTO',
+    subdomains:'abcd', maxZoom:19
+  }).addTo(map);
+
+  // Add zoom control to bottom-left
+  map.zoomControl.setPosition('bottomleft');
+
+  buildMarkers();
+  buildList();
+}
+
+function buildMarkers() {
+  markers.forEach(m => map.removeLayer(m.layer));
+  markers = [];
+
+  const filtered = getFiltered();
+  filtered.forEach(s => {
+    const m = L.marker([s.lat, s.lng], { icon: makeIcon(s.region) })
+      .addTo(map)
+      .bindPopup(`
+        <div class="popup-city">${s.city}</div>
+        <div class="popup-name">${s.name}</div>
+        <div class="popup-hrs">${s.hours.replace(/\|/g,'\n')}</div>
+        ${s.phone ? `<div class="popup-phone">📞 ${s.phone}</div>` : ''}
+      `, { direction:'rtl', maxWidth:220 });
+
+    m.on('click', () => highlightItem(s));
+    markers.push({ store: s, layer: m });
+  });
+
+  document.getElementById('countLbl').textContent = `מציג ${filtered.length} סניפים`;
+  document.getElementById('countNum').textContent = filtered.length;
+}
+
+function buildList() {
+  const list = document.getElementById('list');
+  list.innerHTML = '';
+  const filtered = getFiltered();
+  filtered.forEach(s => {
+    const d = document.createElement('div');
+    d.className = 'item';
+    d.dataset.lat = s.lat; d.dataset.lng = s.lng;
+    const dot = `<span style="display:inline-block;width:8px;height:8px;background:${COLORS[s.region]};border-radius:50%;margin-left:6px;vertical-align:middle"></span>`;
+    d.innerHTML = `<div class="item-city">${dot}${s.city}</div><div class="item-name">${s.name}</div><div class="item-hrs">${s.hours.split('|')[0]}</div>`;
+    d.onclick = () => {
+      map.setView([s.lat, s.lng], 14);
+      const mk = markers.find(m => m.store === s);
+      if (mk) { mk.layer.openPopup(); mk.layer.setIcon(makeIcon(s.region, true)); }
+      document.querySelectorAll('.item').forEach(i => i.classList.remove('active'));
+      d.classList.add('active');
+      d.scrollIntoView({ behavior:'smooth', block:'nearest' });
+    };
+    list.appendChild(d);
+  });
+}
+
+function highlightItem(s) {
+  const items = document.querySelectorAll('.item');
+  const filtered = getFiltered();
+  const idx = filtered.indexOf(s);
+  items.forEach(i => i.classList.remove('active'));
+  if (idx >= 0 && items[idx]) { items[idx].classList.add('active'); items[idx].scrollIntoView({behavior:'smooth', block:'nearest'}); }
+}
+
+function getFiltered() {
+  const q = document.getElementById('search').value.trim().toLowerCase();
+  return ALL.filter(s => {
+    const rOk = activeRegion === 'all' || s.region === activeRegion;
+    const qOk = !q || s.city.includes(q) || s.name.toLowerCase().includes(q);
+    return rOk && qOk;
+  });
+}
+
+function doFilter() { buildMarkers(); buildList(); }
+
+function setRegion(r, btn) {
+  activeRegion = r;
+  document.querySelectorAll('.btn').forEach(b => b.classList.remove('on'));
+  btn.classList.add('on');
+  buildMarkers(); buildList();
+
+  // Fly to region
+  const bounds = { north:[33.0,32.4,35.0,33.5], center:[31.8,32.2,34.5,35.2], south:[30.8,31.8,34.3,35.5], jerusalem:[31.6,31.9,34.9,35.5], eilat:[29.4,29.7,34.8,35.1] };
+  if (r !== 'all' && bounds[r]) {
+    const [s,n,w,e] = bounds[r];
+    map.fitBounds([[s,w],[n,e]], {padding:[30,30]});
+  } else {
+    map.setView([31.5, 34.85], 7);
+  }
+}
+
+window.onload = initMap;
+</script>
+</body>
+</html>
